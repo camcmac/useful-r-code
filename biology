@@ -1,0 +1,89 @@
+#only these libraries are used in this section
+library(tidyverse)
+
+ 
+ #Make taxonomic rank into an ordered factor
+ mutate(rank = factor(rank, ordered = T, levels = c("Kingdom",
+                                                     "Phylum",
+                                                     "Class",
+                                                     "Order",
+                                                     "Family",
+                                                     "Genus",
+                                                     "Species")
+                     )
+       )
+       
+
+###########################################
+#SCRAPE NOMENCLATURE FROM ONLINE DATABASES#
+###########################################
+
+#character vector of scientific names for which full taxonomic nomenclature is needed
+needed_names <- c("Boops boops", "Gastropoda", "Sabellidae", "Lepas anatifera")
+
+#get database ID corresponding to those scientific names
+worms.data <- get_wormsid(sci_com = needed_names,
+                          search_type = "scientific",
+                          ask = F,
+                          accepted = T,
+                          messages = F)
+
+#put output into a dataframe
+id.result <- worms.data %>%
+  as.data.frame()
+
+#create clean dataframe of results
+worms_found <- id.result %>%
+  mutate(raw_name = needed_names, #add original search term corresponding to each result
+         db_id = as.integer(ids), #rename id to be more descriptive
+         database = "worms") %>% #name the source of the results
+  select(raw_name, database, db_id) %>%
+  filter(!is.na(db_id)) #get rid of rows where no result was returned by the scrape
+
+#isolate numeric vector of only returned ids to be used to pull full taxonomy
+worms.input <- id.result %>%
+  filter(match != "not found") %>%
+  pull(ids)
+
+#scrape full taxonomy from WoRMS database (time consuming)
+worms.heirarchy <- classification(worms.input, db = "worms")
+
+#store results in new object to preserve time consuming work as original (in case of errors)
+temp.output <- worms.heirarchy
+
+#pull search term from classification object to use to label the results as they are pulled out
+search_terms <- map_chr(c(1:length(worms.heirarchy)), ~ last(worms.heirarchy[[.]]$name))
+
+#name each object in the classification object by the search term used to find the record
+names(temp.output) <- search_terms
+
+#pull classification object into a dataframe
+temp.output <- temp.output %>%
+  bind_rows(.id = "scientific_name")
+
+#comments will be finished at a later date
+id_values <- temp.output %>%
+  mutate(worms_id = ifelse(scientific_name == name, id, NA)) %>%
+  filter(!is.na(worms_id)) %>%
+  select(scientific_name, worms_id)
+  
+taxonomy <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+worms.output <- temp.output %>%
+  left_join(id_values) %>%
+  select(scientific_name, worms_id, rank, name) %>%
+  filter(rank %in% taxonomy) %>%
+  mutate(rank = factor(rank, ordered = T, levels = taxonomy)) %>%
+  group_by(scientific_name, worms_id, rank) %>%
+  summarise(name = unique(name)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c(scientific_name, worms_id),
+              names_from = rank,
+              values_from = name) %>%
+  mutate(db_id = worms_id,
+         database = "worms") %>%
+  janitor::clean_names() %>%
+  select(scientific_name, db_id, database, kingdom:species) %>%
+  left_join(worms_found, by = c("db_id"))
+  
+write.csv(worms.output, paste0(save_prefix, "worms-taxonomy", save_date, ".csv"))
