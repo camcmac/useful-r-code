@@ -1,0 +1,41 @@
+#all code in this file uses only only these packages
+library(tidyverse)
+library(janitor)
+
+##################################
+#SPECIFY FOLDERS USED IN ANALYSIS#
+##################################
+
+
+#file path to the folder where full datasets are stored
+data_source <- "F:/AMD-Biosec/data/biosec-paper/"
+
+#file path to where the figures from this analysis will be stored
+output_save <- "F:/AMD-Biosec/outputs/biosec-paper/"
+
+
+###########################################
+#GET AND QUICK CLEAN ALL FILES FROM FOLDER#
+###########################################
+
+#get a list of the names of the files in that folder
+file_names <- data_source %>%
+  list.files() %>% #creates a character vector of the file names in that folder
+  str_remove(".csv") #remove file type to simplify naming of dataframes
+
+#create a vector of complete file paths for all files in that folder
+file_locations <- file_names %>%
+  paste0(data_source, ., ".csv") #add folder location and file type to complete location
+
+#read all files in the folder into the environment and give them proper names
+file_locations %>%
+  map(~ read.csv(., stringsAsFactors = F)) %>% #create a list of dataframes each containing a file from the folder
+  set_names(file_names) %>% #name the dfs in the list so that they pull out properly to the environment
+  map(~ janitor::clean_names(.)) %>% #make r-friendly column names
+  map(~ mutate_all(., ~ na_if(., ""))) %>% #make empty cells into NA cells (artifact of downloading from Google Drive)
+  map(~ janitor::remove_empty(.)) %>% #remove entirely empty rows and columns (artifact of using Excel)
+  list2env(envir = .GlobalEnv) #pull all dfs from the list individually to the global environment
+  
+  
+  
+  
