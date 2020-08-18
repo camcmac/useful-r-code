@@ -1,0 +1,31 @@
+#code in this file uses only these libraries
+library(tidyverse)
+library(digitize)
+
+##################################
+#GET/SAVE DATA FROM MAP OR FIGURE#
+##################################
+
+#set location of source file and outputs
+folder <- "F:/AMD-Biosec/code/Digitize/"
+
+#specify standardised name for source and output
+paper <- "tekman2017"
+
+#combine folder location with standardised name and source file type
+file <- paste0(folder, paper, ".jpg")
+
+#initialise interface and save the output to a dataframe
+result <- digitize(file)
+
+#give the output points the correct name and format
+clean.result <- result %>%
+  mutate(lat = y) %>%
+  mutate(long = x) %>%
+  select(lat, long)
+
+#combine folder location with standardised name and output file type
+save.file <- paste0(folder, paper, ".csv")
+
+#save output as a csv
+write.csv(clean.result, save.file)
